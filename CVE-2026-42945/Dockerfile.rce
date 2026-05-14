@@ -1,0 +1,56 @@
+FROM debian:bullseye-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    wget \
+    libpcre3-dev \
+    zlib1g-dev \
+    libssl-dev \
+    gdb \
+    python3 \
+    python3-pip \
+    netcat-openbsd \
+    procps \
+    curl \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /tmp
+
+ENV NGINX_VERSION=1.28.0
+ENV ASLR_DISABLED=1
+
+RUN wget http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz && \
+    tar -xzf nginx-${NGINX_VERSION}.tar.gz && \
+    cd nginx-${NGINX_VERSION} && \
+    ./configure \
+        --prefix=/etc/nginx \
+        --sbin-path=/usr/sbin/nginx \
+        --conf-path=/etc/nginx/nginx.conf \
+        --error-log-path=/var/log/nginx/error.log \
+        --http-log-path=/var/log/nginx/access.log \
+        --with-debug \
+        --with-http_rewrite_module && \
+    make CFLAGS="-ggdb -g3 -O0" && \
+    make install && \
+    cd /tmp && \
+    rm -rf nginx-${NGINX_VERSION}*
+
+RUN useradd -r -s /bin/false nginx || true
+
+COPY nginx.conf /etc/nginx/nginx.conf
+
+RUN mkdir -p /etc/nginx/conf.d /var/log/nginx /var/run/nginx
+
+RUN echo 0 > /proc/sys/kernel/randomize_va_space || true
+
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+
+EXPOSE 80
+
+USER root
+
+CMD ["/start.sh"]
